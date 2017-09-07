@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
 #
-SET(UTILS_SRCS FileLoader.hpp)
+SET(UTILS_SRCS RedisLoader.hpp)
 
 # ===================== build
 if(TARGET utils)
@@ -11,5 +11,7 @@ else()
   ADD_LIBRARY(utils INTERFACE)
   # -ljsoncpp
   TARGET_LINK_LIBRARIES(utils INTERFACE jsoncpp)
+  #
+  target_link_libraries(utils INTERFACE libhiredis.so)
 endif()
 

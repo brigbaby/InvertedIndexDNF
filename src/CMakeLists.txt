@@ -12,3 +12,4 @@ ADD_SUBDIRECTORY("index")
 add_executable(InvertedIndexDNF ${SOURCE_FILES})
 
 TARGET_LINK_LIBRARIES(InvertedIndexDNF stdc++ jsoncpp)
+target_link_libraries(LightDNF libhiredis.so)

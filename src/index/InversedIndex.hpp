@@ -15,6 +15,7 @@
 
 #include "Container.hpp"
 
+typedef std::unordered_map<std::string, std::vector<int>> assignmentsInOrder;
 class InversedIndex{
 
 private:
@@ -22,167 +23,185 @@ private:
 	std::vector<DOC*> docs;
 	std::vector<CONJUNCTION*> conjunctions;
 	std::vector<ASSIGNMENT*> assignments;
-	std::unordered_map<int, std::vector<int>> assignmentIndexesMap;
+	std::unordered_map<int, assignmentsInOrder*> assignmentIndexesMap;
 
-	void FilterWithConjunctionSize(int qry_conj_size, std::vector<int>& matchingAssignmentIndexes);
-
-	std::string Assignment2Doc(int idx);
-
-	CONJUNCTION* Assignment2Conjunction(int idx);
-
-	std::string Conjunction2Doc(CONJUNCTION* conj);
-
-	void MatchAssignment(std::vector<int>& AssiIndexs, const ASSIGNMENT& qry, std::unordered_map<long, int>& ConjCount);
+	void MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &matchingAssignmentIndexes);
+	void CountingEachConjunction(std::vector<int>& matchingAssignmentIndexes, std::unordered_map<int, int>& ConjunctionByCount);
+    void FilteringConjByEachQueryAssi(std::unordered_map<int, int>& ConjunctionByCount, int sizeofAssi, std::unordered_map<int, int>& matchingConjunction);
+    void MatchingDoc(std::unordered_map<int, int>& matchingConjunction, std::vector<std::string>& matchingDocsAddress);
 
 public:
 
 	InversedIndex(){}
 
 	void Insert(const Json::Value& doc);
-
-	void Select(const Json::Value& query, Json::Value& result);
+    void Select(const Json::Value& query, Json::Value& result);
+    void makeAssignmentMap();
 };
 
-// filter with conjunction size
-void InversedIndex::FilterWithConjunctionSize(int qry_conj_size, std::vector<int> &matchingAssignmentIndexes) {
-	for(int i=qry_conj_size; i>=0; --i){
-		if(assignmentIndexesMap.find(i)!=assignmentIndexesMap.end())
-			matchingAssignmentIndexes.insert(matchingAssignmentIndexes.end(), assignmentIndexesMap[i].begin(), assignmentIndexesMap[i].end());
+void InversedIndex::MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &matchingAssignmentIndexes) {
+    std::string assignmentKey = qry.name + "_" + qry.value;
+    for(int i = qry.conj_size; i >= 0; --i){
+		if(assignmentIndexesMap.find(i) != assignmentIndexesMap.end()){
+			if((*assignmentIndexesMap[i]).find(assignmentKey) != (*assignmentIndexesMap[i]).end()){
+				for(auto idx:(*assignmentIndexesMap[i])[assignmentKey]){
+                    if(assignments[idx]->relation >= qry.relation)
+                        matchingAssignmentIndexes.push_back(idx);
+                }
+            }
+		}
+	}
+	return;
+}
+
+void InversedIndex::CountingEachConjunction(std::vector<int>& matchingAssignmentIndexes, std::unordered_map<int, int>& ConjunctionByCount) {
+	//ConjunctionByCount's key is index of conjunction,CountingEachConjunction's value is the times that each conjunction's
+    //times of appearance in this single loop of matching one attribute of query
+    for (auto &idx : matchingAssignmentIndexes) {
+        int conjIndex = (*assignments[idx]).conjIndex;
+        auto it = ConjunctionByCount.find(conjIndex);
+        if (it != ConjunctionByCount.end()) {
+            it->second++;
+        }
+        else {
+            ConjunctionByCount.insert(std::pair<int, int>(conjIndex, 1));
+        }
+    }
+	return;
+}
+
+void InversedIndex::FilteringConjByEachQueryAssi(std::unordered_map<int, int>& ConjunctionByCount, int sizeofAttibute, std::unordered_map<int, int>& matchingConjunction){
+    for(auto it : ConjunctionByCount){
+        if(it.second == sizeofAttibute){
+            if(matchingConjunction.find(it.first) != matchingConjunction.end()){
+                ++matchingConjunction[it.first];
+            }
+            else matchingConjunction.insert(std::pair<int ,int>(it.first, 1));
+        }
+    }
+}
+
+void InversedIndex::MatchingDoc(std::unordered_map<int, int>& matchingConjunction, std::vector<std::string>& matchingDocsIDs){
+	for(auto it : matchingConjunction){
+        if(it.second == conjunctions[it.first]->size){
+			int docIndex = conjunctions[it.first]->docIndex;
+            matchingDocsIDs.push_back(docs[docIndex]->id);
+        }
 	}
 }
 
-// get belong doc with assignment index
-std::string InversedIndex::Assignment2Doc(int idx){
-  return ((DOC*)((CONJUNCTION*)assignments[idx]->conj_belong)->doc_belong)->id;
-}
-
-// get belong junction with assignment index
-CONJUNCTION* InversedIndex::Assignment2Conjunction(int idx){
-  return (CONJUNCTION*)assignments[idx]->conj_belong;
-}
-
-// get belong doc with junction index
-std::string InversedIndex::Conjunction2Doc(CONJUNCTION* conj){
-  return ((DOC*)conj->doc_belong)->id;
-}
-
-// match assignment precisely
-//AssiIndexs is the same as results in "FilterWithConjunctionSize"
-void InversedIndex::MatchAssignment(std::vector<int>& AssiIndexs, const ASSIGNMENT& qry, std::unordered_map<long, int>& ConjCount){
-  //
-  for(auto& idx : AssiIndexs){
-	if(boost::iequals(assignments[idx]->name, qry.name) &&
-	   boost::iequals(assignments[idx]->value, qry.value) &&
-	   (assignments[idx]->relation >= qry.relation)){
-	  long conj = (long)Assignment2Conjunction(idx);
-	  auto it = ConjCount.find(conj);
-	  if(it != ConjCount.end()){
-		it->second++;
-	  }
-	  else {
-		ConjCount.insert(std::pair<long, int>(conj, 1));
-	  }
-	}
-  }
-
-  return;
+void InversedIndex::makeAssignmentMap(){
+    if(assignments.size()>0){
+        std::cout << "The assignmentIndexesMap is already existed" << std::endl;
+        return;
+    }
+    for(int i=0; i<assignments.size(); ++i){
+        std::string assignmentKey = assignments[i]->name + "_" + assignments[i]->value;
+        int conj_size = assignments[i]->conj_size;
+        if(assignmentIndexesMap.find(conj_size) != assignmentIndexesMap.end()){
+            if((*assignmentIndexesMap[conj_size]).find(assignmentKey) != (*assignmentIndexesMap[conj_size]).end())
+                (*assignmentIndexesMap[conj_size])[assignmentKey].push_back(i);
+            else
+                (*assignmentIndexesMap[conj_size])[assignmentKey] = {i};
+        }
+        else{
+            assignmentIndexesMap[conj_size] = new assignmentsInOrder;
+            (*assignmentIndexesMap[conj_size])[assignmentKey] = {i};
+        }
+    }
 }
 
 // insert
 void InversedIndex::Insert(const Json::Value& doc){
-  // doc
-  DOC* ptr_doc = new DOC;
-  ptr_doc->id = doc["id"].asString();
-  ptr_doc->size = doc["conditions"].size();
-  docs.push_back(ptr_doc);
+    // doc
+    DOC* ptr_doc = new DOC;
+    ptr_doc->id = doc["id"].asString();
+    ptr_doc->size = doc["conditions"].size();
+    docs.push_back(ptr_doc);
 
-  for(int i = 0;i < doc["conditions"].size();i++) {
-	Json::Value ConjJson = doc["conditions"][i];
-	// conjunction
-	CONJUNCTION* ptr_conj = new CONJUNCTION;
-	ptr_conj->doc_belong = (long) ptr_doc;
-	ptr_conj->size = ConjJson.size();
-	conjunctions.push_back(ptr_conj);
+    for(int i = 0;i < doc["conditions"].size();i++) {
+        Json::Value ConjJson = doc["conditions"][i];
+        // conjunction
+        CONJUNCTION* ptr_conj = new CONJUNCTION;
+        ptr_conj->docIndex = docs.size()-1;
+        ptr_conj->size = ConjJson.size();
+        conjunctions.push_back(ptr_conj);
 
-	for(auto& FieldName : ConjJson.getMemberNames()){
-	  for(auto& FieldValue : ConjJson[FieldName]){
-		// assignment
-		ASSIGNMENT* ptr_assi = new ASSIGNMENT;
-		ptr_assi->name = FieldName;
-		ptr_assi->value = FieldValue.asString();
-		ptr_assi->relation = ConjJson[FieldName].size();
-		ptr_assi->conj_size = ptr_conj->size;
-		ptr_assi->conj_belong = (long)ptr_conj;
-		assignments.push_back(ptr_assi);
-		  if(assignmentIndexesMap.find(ptr_assi->conj_size) != assignmentIndexesMap.end())
-			  assignmentIndexesMap[ptr_assi->conj_size].push_back(assignments.size()-1);
-		  else
-			  assignmentIndexesMap[ptr_assi->conj_size]={assignments.size()-1};
-		//
-		//std::cout << ptr_assi->name << "," << ptr_assi->value << "," << ptr_assi->relation
-		//		  << "," << ptr_assi->conj_size << "," << ptr_assi->conj_belong << std::endl;
-	  }
-	}
-  }
+        for(auto& FieldName : ConjJson.getMemberNames()){
+            for(auto& FieldValue : ConjJson[FieldName]){
+                // assignment
+                ASSIGNMENT* ptr_assi = new ASSIGNMENT;
+                ptr_assi->name = FieldName;
+                ptr_assi->value = FieldValue.asString();
+                ptr_assi->relation = ConjJson[FieldName].size();
+                ptr_assi->conj_size = ptr_conj->size;
+                ptr_assi->conjIndex = conjunctions.size()-1;
+                assignments.push_back(ptr_assi);
+                std::string assignmentKey = ptr_assi->name + "_" + ptr_assi->value;
 
-  return;
+                if(assignmentIndexesMap.find(ptr_assi->conj_size) != assignmentIndexesMap.end()){
+                  if((*assignmentIndexesMap[ptr_assi->conj_size]).find(assignmentKey) != (*assignmentIndexesMap[ptr_assi->conj_size]).end())
+                      (*assignmentIndexesMap[ptr_assi->conj_size])[assignmentKey].push_back(assignments.size()-1);
+                  else
+                      (*assignmentIndexesMap[ptr_assi->conj_size])[assignmentKey] = {assignments.size()-1};
+                }
+                else{
+                    assignmentIndexesMap[ptr_assi->conj_size] = new assignmentsInOrder;
+                    (*assignmentIndexesMap[ptr_assi->conj_size])[assignmentKey] = {assignments.size()-1};
+                }
+            }
+        }
+    }
+
+    return;
 }
+
 
 // select
 void InversedIndex::Select(const Json::Value& query, Json::Value& result){
   // check
-  std::cout << std::endl << "----- Summary ------" << std::endl;
+  std::cout << std::endl << "----- 0 ------" << std::endl;
   std::cout << "doc size " << docs.size() << std::endl;
   std::cout << "conjunction size " << conjunctions.size() << std::endl;
   std::cout << "assignment size " << assignments.size() << std::endl;
-
   Json::Value condition = query;
-  // filter with conjunction size, candidates' conj_size must not be greater than that of query
-  std::vector<int> LessConjSizeAssi;
-  FilterWithConjunctionSize(condition.size(), LessConjSizeAssi);
-  // check
-  std::cout << std::endl <<  "After fitlered by size of conjunction " << condition.size() << "," << LessConjSizeAssi.size() << " remained ..." << std::endl;
-  for(auto& idx : LessConjSizeAssi){
-	std::cout<< assignments[idx]->name << "," << assignments[idx]->value << "," << assignments[idx]->relation
-			 << "," << Assignment2Doc(idx) << std::endl;
+  std::cout << "condition's size: " << condition.size() << std::endl;
+
+  //match the assignment and the conjunction
+  std::unordered_map<int, int> matchingConjunction;
+  for(auto& FieldName : condition.getMemberNames()) {
+      //The times of this loop is the numbers of attribute, same as the numbers of query's assignment
+      std::vector<int> matchingAssignmentIndexes;
+      for (auto &FieldValue : condition[FieldName]) {
+          // The times of this loop is the numbers of each assignment's value
+          ASSIGNMENT qry_assi;
+          qry_assi.name = FieldName;
+          qry_assi.value = FieldValue.asString();
+          qry_assi.relation = condition[FieldName].size();
+          qry_assi.conj_size = condition.size();
+          // match assignment precisely
+          MatchingAssignment(qry_assi, matchingAssignmentIndexes);
+      }
+      std::unordered_map<int, int> ConjunctionByCount;
+      CountingEachConjunction(matchingAssignmentIndexes, ConjunctionByCount);
+      FilteringConjByEachQueryAssi(ConjunctionByCount, condition[FieldName].size(), matchingConjunction);
+
   }
 
-  std::unordered_map<std::string, int> DocCount;
-  for(auto& FieldName : condition.getMemberNames()) {
-	//
-	std::unordered_map<long, int> ConjCount;
-	for(auto &FieldValue : condition[FieldName]) {
-	  // assignment
-	  ASSIGNMENT qry_assi;
-	  qry_assi.name = FieldName;
-	  qry_assi.value = FieldValue.asString();
-	  qry_assi.relation = condition[FieldName].size();
-	  qry_assi.conj_size = condition.size();
-	  // match assignment precisely
-	  MatchAssignment(LessConjSizeAssi, qry_assi, ConjCount);
-	}
-	// remove conjunctions whose count is less than size of assignment
-	for(auto it : ConjCount){
-	  if(it.second == condition[FieldName].size()){
-		std::string doc = Conjunction2Doc((CONJUNCTION*)it.first);
-		auto it = DocCount.find(doc);
-		if(it != DocCount.end()){
-		  it->second++;
-		}
-		else{
-		  DocCount.insert(std::pair<std::string, int>(doc, 1));
-		}
-	  }
-	}
-  }
-  // remove docs whose count is less than size of conjunction
+  //match the doc
+  std::vector<std::string> matchingDocsIDs;
+  MatchingDoc(matchingConjunction, matchingDocsIDs);
+
   Json::Value DocList;
-  for(auto it : DocCount){
-	if(it.second == condition.size()){
-	  DocList.append(it.first);
-	}
+  //for(auto& it : matchingDocsIDs){
+  //    DocList.append(it);
+  //}
+  //result['doc'] = DocList;
+
+  for(int i=0; i<matchingDocsIDs.size(); ++i){
+      DocList.append(matchingDocsIDs[i]);
   }
-  result["doc"] = DocList;
+  result = DocList;
 
   return;
 }
