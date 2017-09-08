@@ -27,16 +27,16 @@ private:
 
 	void MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &matchingAssignmentIndexes);
 	void CountingEachConjunction(std::vector<int>& matchingAssignmentIndexes, std::unordered_map<int, int>& ConjunctionByCount);
-    void FilteringConjByEachQueryAssi(std::unordered_map<int, int>& ConjunctionByCount, int sizeofAssi, std::unordered_map<int, int>& matchingConjunction);
-    void MatchingDoc(std::unordered_map<int, int>& matchingConjunction, std::vector<std::string>& matchingDocsAddress);
+	void FilteringConjByEachQueryAssi(std::unordered_map<int, int>& ConjunctionByCount, int sizeofAssi, std::unordered_map<int, int>& matchingConjunction);
+	void MatchingDoc(std::unordered_map<int, int>& matchingConjunction, std::vector<std::string>& matchingDocsAddress);
 
 public:
 
 	InversedIndex(){}
 
 	void Insert(const Json::Value& doc);
-    void Select(const Json::Value& query, Json::Value& result);
-    void makeAssignmentMap();
+	void Select(const Json::Value& query, Json::Value& result);
+	void makeAssignmentMap();
 };
 
 void InversedIndex::MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &matchingAssignmentIndexes) {
@@ -45,10 +45,10 @@ void InversedIndex::MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &
 		if(assignmentIndexesMap.find(i) != assignmentIndexesMap.end()){
 			if((*assignmentIndexesMap[i]).find(assignmentKey) != (*assignmentIndexesMap[i]).end()){
 				for(auto idx:(*assignmentIndexesMap[i])[assignmentKey]){
-                    if(assignments[idx]->relation >= qry.relation)
-                        matchingAssignmentIndexes.push_back(idx);
-                }
-            }
+					if(assignments[idx]->relation >= qry.relation)
+						matchingAssignmentIndexes.push_back(idx);
+				}
+			}
 		}
 	}
 	return;
@@ -66,7 +66,7 @@ void InversedIndex::CountingEachConjunction(std::vector<int>& matchingAssignment
         else {
             ConjunctionByCount.insert(std::pair<int, int>(conjIndex, 1));
         }
-    }
+	}
 	return;
 }
 
@@ -86,7 +86,7 @@ void InversedIndex::MatchingDoc(std::unordered_map<int, int>& matchingConjunctio
         if(it.second == conjunctions[it.first]->size){
 			int docIndex = conjunctions[it.first]->docIndex;
             matchingDocsIDs.push_back(docs[docIndex]->id);
-        }
+		}
 	}
 }
 
