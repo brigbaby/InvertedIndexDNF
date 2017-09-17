@@ -55,7 +55,7 @@ void InversedIndex::MatchingAssignment(const ASSIGNMENT &qry, std::vector<int> &
 }
 
 void InversedIndex::CountingEachConjunction(std::vector<int>& matchingAssignmentIndexes, std::unordered_map<int, int>& ConjunctionByCount) {
-	//ConjunctionByCount's key is index of conjunction,CountingEachConjunction's value is the times that each conjunction's
+    //ConjunctionByCount's key is index of conjunction,CountingEachConjunction's value is the times that each conjunction's
     // times of appearance in this single loop of matching one attribute of query
     for (auto &idx : matchingAssignmentIndexes) {
         int conjIndex = (*assignments[idx]).conjIndex;
