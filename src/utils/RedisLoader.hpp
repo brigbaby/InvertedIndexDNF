@@ -56,21 +56,20 @@ void RedisLoader::LoadRedis(Json::Value &result) {
     redis_timeout.tv_sec = 0;
     redis_timeout.tv_usec = Timeout;
 
-    redisContext* timeout_contact;
-    timeout_contact = redisConnectWithTimeout(IP.data(), Port, redis_timeout);
-    if(timeout_contact == NULL || timeout_contact->err){
+    redisContext* context = NULL;
+    context = redisConnectWithTimeout(IP.data(), Port, redis_timeout);
+    if(context == NULL || context>err){
         std::cout << "Connect to redisServer failed" << std::endl;
         GetErrorPosition(__FILE__, __LINE__);
         return;
     }
-    if(redisSetTimeout(timeout_contact, redis_timeout) != REDIS_OK)
+    if(redisSetTimeout(context, redis_timeout) != REDIS_OK)
     {
         std::cout << "Connect to redisServer time out" << std::endl;
         GetErrorPosition(__FILE__, __LINE__);
         return;
     }
 
-    redisContext *context = NULL;
     redisReply *reply_of_ADs = GetADs(IP, Port, DB_index, AD_prefix, &context);
     if (reply_of_ADs == NULL) {
         std::cout << "can not get ads data" << std::endl;
